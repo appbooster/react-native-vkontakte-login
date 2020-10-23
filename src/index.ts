@@ -82,7 +82,6 @@ export const enum VKError {
  * Provides login and share functionality
  */
 export class VK {
-
   /**
    * Initializes VK SDK from JS code.
    * You only need to call this once before you call login or logout.
@@ -138,7 +137,11 @@ export class VK {
    */
   static share(options: VKShareOptions): Promise<number> {
     if (options.image) {
-      options.image = resolveAssetSource(options.image).uri;
+      try {
+        options.image = resolveAssetSource(options.image).uri;
+      } catch (e) {
+        options.image = '';
+      }
     }
     return VKShare.share(options);
   }

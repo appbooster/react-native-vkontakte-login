@@ -1,21 +1,12 @@
-#if __has_include(<React/RCTBridge.h>)
-#import <React/RCTBridge.h>
+#if __has_include(<React/RCTConvert.h>)
 #import <React/RCTConvert.h>
 #import <React/RCTUtils.h>
-#import <React/RCTImageLoader.h>
-#import <React/RCTImageSource.h>
-#elif __has_include("RCTBridge.h")
-#import "RCTBridge.h"
+#elif __has_include("RCTConvert.h")
 #import "RCTConvert.h"
 #import "RCTUtils.h"
-#import "RCTImageLoader.h"
-#import "RCTImageSource.h"
 #else
-#import "React/RCTBridge.h" // Required when used as a Pod in a Swift project
-#import "React/RCTConvert.h"
+#import "React/RCTConvert.h" // Required when used as a Pod in a Swift project
 #import "React/RCTUtils.h"
-#import "React/RCTImageLoader.h"
-#import "React/RCTImageSource.h"
 #endif
 
 #import "VkontakteSharing.h"
@@ -35,8 +26,6 @@
 
 @implementation VkontakteSharing
 
-@synthesize bridge = _bridge;
-
 - (void)openShareDlg:(VKShareDialogController *) dialog resolver: (RCTPromiseResolveBlock) resolve rejecter:(RCTPromiseRejectBlock) reject {
   UIViewController *root = [RNVkontakteLoginUtils topMostViewController];
   [dialog setCompletionHandler:^(VKShareDialogController *dialog, VKShareDialogControllerResult result) {
@@ -48,16 +37,19 @@
       DMLog(@"onVkShareCancel");
       reject(RCTErrorUnspecified, nil, RCTErrorWithMessage(@"canceled"));
     }
+      [root dismissViewControllerAnimated:YES completion:nil];
   }];
 
   [root presentViewController:dialog animated:YES completion:nil];
 }
 
-RCT_EXPORT_MODULE();
-
-- (dispatch_queue_t)methodQueue {
-  return dispatch_get_main_queue();
+- (VKUploadImage *)getImageForSharing:(NSString *) imagePath {
+  NSURL *url = [NSURL URLWithString:[imagePath stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
+  UIImage *imageForSharing = [[UIImage alloc] initWithData:[NSData dataWithContentsOfURL:url]];
+  return [VKUploadImage uploadImageWithImage:imageForSharing andParams:nil];
 }
+
+RCT_EXPORT_MODULE();
 
 RCT_EXPORT_METHOD(share: (NSDictionary *) data resolver: (RCTPromiseResolveBlock) resolve rejecter:(RCTPromiseRejectBlock) reject) {
   DMLog(@"Open Share Dialog");
@@ -67,8 +59,10 @@ RCT_EXPORT_METHOD(share: (NSDictionary *) data resolver: (RCTPromiseResolveBlock
   }
 
   NSString *imagePath = data[@"image"];
+  BOOL isImageExists = imagePath != nil && imagePath.length;
+
   NSMutableArray *permissions = @[VK_PER_WALL];
-  if (imagePath != nil && imagePath.length){
+  if (isImageExists) {
     permissions = [permissions arrayByAddingObject:VK_PER_PHOTOS];
   }
   VKSdk *sdk = [VKSdk instance];
@@ -77,28 +71,15 @@ RCT_EXPORT_METHOD(share: (NSDictionary *) data resolver: (RCTPromiseResolveBlock
     return;
   }
 
-  VKShareDialogController * shareDialog = [VKShareDialogController new];
-  shareDialog.text = [RCTConvert NSString:data[@"description"]];
-  shareDialog.shareLink = [[VKShareLink alloc] initWithTitle:[RCTConvert NSString:data[@"linkText"]]
-                                               link:[NSURL URLWithString:[RCTConvert NSString:data[@"linkUrl"]]]];
-  shareDialog.dismissAutomatically = YES;
-
-  if (imagePath.length && _bridge.imageLoader) {
-    RCTImageSource *source = [RCTConvert RCTImageSource:data[@"image"]];
-
-    [_bridge.imageLoader loadImageWithURLRequest:source.request callback:^(NSError *error, UIImage *image) {
-      if (image == nil) {
-        NSLog(@"Failed to load image");
-      } else {
-        VKUploadImage *VKImage = [[VKUploadImage alloc] init];
-        VKImage.sourceImage = image;
-        shareDialog.uploadImages = @[VKImage];
-      }
-      [self openShareDlg:shareDialog resolver:resolve rejecter:reject];
-    }];
-  } else {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    VKShareDialogController *shareDialog = [VKShareDialogController new];
+    shareDialog.text = [RCTConvert NSString:data[@"description"]];
+    shareDialog.shareLink = [[VKShareLink alloc] initWithTitle:[RCTConvert NSString:data[@"linkText"]] link:[NSURL URLWithString:[RCTConvert NSString:data[@"linkUrl"]]]];
+    if (isImageExists) {
+      shareDialog.uploadImages = @[[self getImageForSharing:imagePath]];
+    }
     [self openShareDlg:shareDialog resolver:resolve rejecter:reject];
-  }
+  });
 }
 
 @end
