@@ -140,7 +140,7 @@ export class VK {
       try {
         options.image = resolveAssetSource(options.image).uri;
       } catch (e) {
-        options.image = '';
+        options.image = undefined;
       }
     }
     return VKShare.share(options);
