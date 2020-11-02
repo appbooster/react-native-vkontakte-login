@@ -78,7 +78,12 @@ RCT_EXPORT_METHOD(share: (NSDictionary *) data resolver: (RCTPromiseResolveBlock
     if (isImageExists) {
       shareDialog.uploadImages = @[[self getImageForSharing:imagePath]];
     }
-    [self openShareDlg:shareDialog resolver:resolve rejecter:reject];
+    [VKSdk wakeUpSession:permissions completeBlock:^(VKAuthorizationState state, NSError *error) {
+      if (state == VKAuthorizationUnknown && [VKSdk accessToken]) {
+        [VKSdk forceLogout];
+      }
+      [self openShareDlg:shareDialog resolver:resolve rejecter:reject];
+    }];
   });
 }
 
